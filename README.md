@@ -1,5 +1,7 @@
 # gpu-scheduler-sim
 
+Proves: GPU job scheduling trade-offs, as a labelled simulation with invariant checks. Verify in 60s: `python3 evaluate.py`.
+
 Shows how queue policy choice (FIFO, EASY backfill, gang-aware bin-packing) changes GPU utilization, wait time and fragmentation on a shared accelerator cluster, using a seeded simulation.
 
 This is a SIMULATION. It needs no GPU, runs on the Python 3 standard library, and costs nothing to run.
