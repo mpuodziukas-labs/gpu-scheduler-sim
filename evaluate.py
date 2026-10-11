@@ -1,12 +1,38 @@
-import json, pathlib
-from checks import check
+"""One command: python3 evaluate.py  (prints the policy comparison; exit 1 if any invariant fails)."""
+import hashlib, sys
+import sim
 
-def results():
-    rows = [json.loads(l) for l in pathlib.Path(__file__).with_name("cases.jsonl").read_text().splitlines() if l]
-    caught = sum(1 for r in rows if r["bad"] and not check(r["text"]))
-    passed = sum(1 for r in rows if not r["bad"] and check(r["text"]))
-    bad = sum(r["bad"] for r in rows)
-    return f"| bad caught | good passed |\n|---|---|\n| {caught}/{bad} | {passed}/{len(rows) - bad} |"
+SEED, JOBS, NODES, G = 7, 500, 8, 8
+
+
+def pct(xs, p):
+    xs = sorted(xs)
+    return xs[min(len(xs) - 1, int(p * len(xs)))]
+
+
+def report(seed):
+    jobs = sim.make_workload(seed, JOBS)
+    rows = ["| policy | utilization | mean wait (min) | p95 wait (min) | makespan (min) | fragmentation | invariants |",
+            "|---|---|---|---|---|---|---|"]
+    for name, pol in sim.POLICIES.items():
+        res = sim.simulate(jobs, pol, NODES, G)
+        waits = [r.start - r.job.arrival for r in res.records]
+        work = sum(r.job.gpus * r.job.duration for r in res.records)
+        span = max(r.end for r in res.records)
+        bad = sim.check_invariants(res, NODES, G)
+        rows.append(f"| {name} | {work / (NODES * G * span):.1%} | {sum(waits) / len(waits):.1f} | {pct(waits, .95)} "
+                    f"| {span} | {res.frag:.1%} | {'PASS' if not bad else 'FAIL ' + bad[0]} |")
+    head = (f"SIMULATION (synthetic workload, not a production scheduler): seed={seed}, {JOBS} jobs, "
+            f"{NODES} nodes x {G} GPUs\n\n")
+    out = head + "\n".join(rows)
+    return out + f"\n\noutput sha256: {hashlib.sha256(out.encode()).hexdigest()[:16]}\n"
+
+
+def main(argv):
+    out = report(SEED)
+    print(out, end="")
+    return 1 if "FAIL" in out.split("\n\n", 1)[1] else 0
+
 
 if __name__ == "__main__":
-    print(results())
+    sys.exit(main(sys.argv[1:]))
